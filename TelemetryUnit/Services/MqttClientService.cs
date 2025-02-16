@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
@@ -31,6 +32,16 @@ public class MqttClientService : BackgroundService
         var mqttClientOptions = mqttClientFactory.CreateClientOptionsBuilder()
             .WithTcpServer(_options.Broker, _options.Port)
             .WithProtocolVersion(MQTTnet.Formatter.MqttProtocolVersion.V500)
+            .WithTlsOptions(new MqttClientTlsOptionsBuilder()
+                .UseTls()
+                .WithIgnoreCertificateRevocationErrors(_options.IgnoreCertificateRevocationErrors)
+                .WithCertificateValidationHandler((MqttClientCertificateValidationEventArgs e) => {
+                    // This allows a useful place to use the debugger to inspect any TLS issues.
+                    return e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None;
+                })
+                .WithSslProtocols(System.Security.Authentication.SslProtocols.Tls13)
+                .WithClientCertificates(new[] { new X509Certificate2(_options.ClientCertificate, _options.ClientCertificatePassword) })
+                .Build())
             .Build();
         var mqttClientDisconnectOptions = mqttClientFactory
             .CreateClientDisconnectOptionsBuilder()

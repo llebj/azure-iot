@@ -10,9 +10,9 @@
             "request": "launch",
             "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/MqttClient/bin/Debug/net8.0/MqttClient.dll",
+            "program": "${workspaceFolder}/TelemetryUnit/bin/Debug/net8.0/TelemetryUnit.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/MqttClient",
+            "cwd": "${workspaceFolder}/TelemetryUnit",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
             "stopAtEntry": false
