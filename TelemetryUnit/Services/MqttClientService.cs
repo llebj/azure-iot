@@ -61,6 +61,7 @@ public class MqttClientService : BackgroundService
             while (await _reader.WaitToReadAsync(stoppingToken))
             {
                 _logger.LogDebug("Attempting to read measurement.");
+                // TODO: find a more graceful way of handling a disconnect; a busy loop sucks.
                 while (mqttClient.IsConnected && _reader.TryRead(out Measurement measurement))
                 {
                     var messageBuilder = new MqttApplicationMessageBuilder();
