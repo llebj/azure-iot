@@ -1,7 +1,10 @@
-using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Logging;
+
+using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribute;
+using Messaging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Logging;
 
 namespace MqttProcessing
 {
@@ -15,10 +18,12 @@ namespace MqttProcessing
         }
 
         [Function("MessageProcessor")]
-        public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequest req)
+        public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req,
+            [FromBody] Measurement measurement)
         {
             _logger.LogInformation("C# HTTP trigger function processed a request.");
-            return new OkObjectResult("Welcome to Azure Functions!");
+            _logger.LogDebug("Received: {Measurement}", measurement);
+            return new OkObjectResult(measurement);
         }
     }
 }

@@ -1,0 +1,56 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MqttProcessing", "MqttProcessing\MqttProcessing.csproj", "{EA6BE805-4B8C-E35E-224B-57E36DAD0C3D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelemetryUnit", "TelemetryUnit\TelemetryUnit.csproj", "{A500F256-5950-74BF-1791-40B6FD276CD5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Messaging", "Messaging\Messaging.csproj", "{0176AD17-6B74-B9D0-37C5-A12AB8276BD2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "MqttProcessing (1)", "MqttProcessing (1)", "{2C21B494-F0F5-AB9C-23B7-B3C533C3DCE8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "obj", "obj", "{80237672-A453-08FA-6DCB-707995E61861}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Debug", "Debug", "{3AA223AA-EDC5-4F20-F87F-296968919644}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "net8.0", "net8.0", "{A97A0FBD-30D8-D1EA-F4A3-E324E7E24B6D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WorkerExtensions", "MqttProcessing\obj\Debug\net8.0\WorkerExtensions\WorkerExtensions.csproj", "{DB7A55AE-BA82-91D5-B4B3-67154BDC365A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EA6BE805-4B8C-E35E-224B-57E36DAD0C3D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EA6BE805-4B8C-E35E-224B-57E36DAD0C3D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EA6BE805-4B8C-E35E-224B-57E36DAD0C3D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EA6BE805-4B8C-E35E-224B-57E36DAD0C3D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A500F256-5950-74BF-1791-40B6FD276CD5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A500F256-5950-74BF-1791-40B6FD276CD5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A500F256-5950-74BF-1791-40B6FD276CD5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A500F256-5950-74BF-1791-40B6FD276CD5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0176AD17-6B74-B9D0-37C5-A12AB8276BD2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0176AD17-6B74-B9D0-37C5-A12AB8276BD2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0176AD17-6B74-B9D0-37C5-A12AB8276BD2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0176AD17-6B74-B9D0-37C5-A12AB8276BD2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB7A55AE-BA82-91D5-B4B3-67154BDC365A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB7A55AE-BA82-91D5-B4B3-67154BDC365A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB7A55AE-BA82-91D5-B4B3-67154BDC365A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB7A55AE-BA82-91D5-B4B3-67154BDC365A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{80237672-A453-08FA-6DCB-707995E61861} = {2C21B494-F0F5-AB9C-23B7-B3C533C3DCE8}
+		{3AA223AA-EDC5-4F20-F87F-296968919644} = {80237672-A453-08FA-6DCB-707995E61861}
+		{A97A0FBD-30D8-D1EA-F4A3-E324E7E24B6D} = {3AA223AA-EDC5-4F20-F87F-296968919644}
+		{DB7A55AE-BA82-91D5-B4B3-67154BDC365A} = {A97A0FBD-30D8-D1EA-F4A3-E324E7E24B6D}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B9C01CBF-77AD-4231-B5E8-341C19CC7925}
+	EndGlobalSection
+EndGlobal

@@ -1,10 +1,11 @@
-using System.Security.Cryptography.X509Certificates;
-using System.Text.Json;
-using System.Threading.Channels;
+using Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+using System.Threading.Channels;
 using TelemetryUnit.Options;
 
 namespace TelemetryUnit.Services;

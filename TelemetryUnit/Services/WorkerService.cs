@@ -1,7 +1,8 @@
-using System.Threading.Channels;
+using Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Threading.Channels;
 using TelemetryUnit.Options;
 
 namespace TelemetryUnit.Services;

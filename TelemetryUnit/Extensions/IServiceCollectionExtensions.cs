@@ -1,5 +1,6 @@
-using System.Threading.Channels;
+using Messaging;
 using Microsoft.Extensions.DependencyInjection;
+using System.Threading.Channels;
 
 namespace TelemetryUnit.Extensions;
 
