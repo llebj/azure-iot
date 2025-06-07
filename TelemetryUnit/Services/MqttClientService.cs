@@ -31,6 +31,7 @@ public class MqttClientService : BackgroundService
     {
         MqttClientFactory mqttClientFactory = new();
         var mqttClientOptions = mqttClientFactory.CreateClientOptionsBuilder()
+            .WithClientId(_options.ClientId)
             .WithTcpServer(_options.Broker, _options.Port)
             .WithProtocolVersion(MQTTnet.Formatter.MqttProtocolVersion.V500)
             .WithTlsOptions(new MqttClientTlsOptionsBuilder()

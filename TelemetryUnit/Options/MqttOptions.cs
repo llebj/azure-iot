@@ -6,6 +6,8 @@ public class MqttOptions
 
     public string Broker { get; set; } = string.Empty;
 
+    public string ClientId { get; set; } = string.Empty;
+
     public string ClientCertificate { get; set; } = string.Empty;
 
     public string ClientCertificatePassword { get; set; } = string.Empty;
