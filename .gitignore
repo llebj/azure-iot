@@ -5,6 +5,9 @@
 
 appsettings.json
 
+# Bicep parameter files
+*.bicepparam
+
 # User-specific files
 *.rsuser
 *.suo
