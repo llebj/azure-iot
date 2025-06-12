@@ -1,6 +1,22 @@
 param location string = resourceGroup().location
+
 param client_name string
 param event_grid_namespace_name string = 'mqtt-broker'
+
+@minLength(3)
+@maxLength(24)
+param storage_account_name string
+param storage_sku string = 'Standard_LRS'
+param table_definition_name string = 'readings'
+
+param server_farm_name string = 'asp-iot'
+
+param server_farm_id string 
+param function_app_name string = 'iot-processing'
+
+// Turn this into a variable
+var function_app_storage_container_name string = 'app-package-${function_app_name}-0ec39e8'
+var function_app_storage_endpoint string = 'https://${storage_account_name}.blob.core.windows.net/${function_app_storage_container_name}'
 
 resource event_grid_namespace 'Microsoft.EventGrid/namespaces@2025-02-15' = {
   name: event_grid_namespace_name
@@ -26,15 +42,6 @@ resource event_grid_namespace 'Microsoft.EventGrid/namespaces@2025-02-15' = {
     isZoneRedundant: true
     publicNetworkAccess: 'Enabled'
     inboundIpRules: []
-    minimumTlsVersionAllowed: '1.2'
-  }
-}
-
-resource ca_certificate 'Microsoft.EventGrid/namespaces/caCertificates@2025-02-15' = {
-  parent: event_grid_namespace
-  name: 'intermediate-ca'
-  properties: {
-    encodedCertificate: '-----BEGIN CERTIFICATE-----\r\nMIIDSzCCAjOgAwIBAgIUVLM+AxrCH6EDeye6X7wMwEJ+zcgwDQYJKoZIhvcNAQELBQAwMTELMAkGA1UEBhMCR0IxEDAOBgNVBAoMB2hvbWVsYWIxEDAOBgNVBAMMB2hvbWVsYWIwHhcNMjUwMjE1MjAyMDQxWhcNMzAwMjE0MjAyMDQxWjA5MQswCQYDVQQGEwJHQjEQMA4GA1UECgwHaG9tZWxhYjEYMBYGA1UEAwwPaW50ZXJtZWRpYXRlLWNhMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx+Ucw/32izAVpbAtyzqZ5XwyCgw4uVPAlQKb1f3iebF7e+vYSIPIjMqrnrqKoCP6B0DZ/wDQ81Ofh1fAiBEogOzLvKIquQDhY7RpuAVj71UTipQdR1CF/L3hKjcZULPUST07fS6d3Q9pEowLs94ie3+FCj820/FKVNkxAB2J6RosP7hUs+2PY7iWmsRgvkCZ1toUn7+46a0gcaWB0rkBB4PxnRHmHBlRQoUrtrSKcGtSwn6QQC21kXXFm8TqRBlgNkOiwtAmAEoVC2VfeVwx1kg2cZjgE+EMBbMlojOccpGe6HGaIK4zTNa8uKi91nt9p7yVGBOn+7PlqRHEZdASRQIDAQABo1MwUTAdBgNVHQ4EFgQUWMLJ04gmvXVHSRLyHPLIcRSA++AwHwYDVR0jBBgwFoAUEtse6amPGQvckeFcLaReuai5QTAwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAXLGxHBAKaTYrXNC6Bx1Mx4kvJH0plV3JXLqsfXV90snsXaTAgaUSjBA7TKUaGOxM11JN0tmbq6AucrggiedT1REhmRGGrJA2m8W/VnamPvhL+sA6vRSLEoKojksagO4t+Mt397nUz0Z40WdAoqGOC1vsap+FyLm7rQiBEjIXT1AvjYrxbq4ppkLKgoL0cfDkvh6P3CIEO1TcZJRd++byP+VHhouKWn0mnqm3nbw2gvL4xSC393Fnn+uJlDr2wYmzr98xYHBfI3rVI7mgdwEyXJknVoRWiDa2CwriCdnWgjE7BvprxdCXldeBTktKzGtrR11UwxjGYgME7AxtL/t7Sw==\r\n-----END CERTIFICATE-----'
   }
 }
 
@@ -51,6 +58,19 @@ resource client 'Microsoft.EventGrid/namespaces/clients@2025-02-15' = {
   }
 }
 
+resource namespaces_mqtt_broker_name_Test 'Microsoft.EventGrid/namespaces/permissionBindings@2025-02-15' = {
+  parent: event_grid_namespace
+  name: 'All'
+  properties: {
+    topicSpaceName: 'All'
+    permission: 'Publisher'
+    clientGroupName: '$all'
+  }
+  dependsOn: [
+    topic_space
+  ]
+}
+
 resource topic_space 'Microsoft.EventGrid/namespaces/topicSpaces@2025-02-15' = {
   parent: event_grid_namespace
   name: 'All'
@@ -58,5 +78,154 @@ resource topic_space 'Microsoft.EventGrid/namespaces/topicSpaces@2025-02-15' = {
     topicTemplates: [
       '#'
     ]
+  }
+}
+
+resource storage_account 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+  name: storage_account_name
+  location: 'uksouth'
+  sku: {
+    name: storage_sku
+  }
+  kind: 'StorageV2'
+  properties: {
+    publicNetworkAccess: 'Enabled'
+    minimumTlsVersion: 'TLS1_2'
+    allowSharedKeyAccess: true
+    accessTier: 'Hot'
+  }
+}
+
+resource blob_service 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01' = {
+  parent: storage_account
+  name: 'default'
+  properties: {
+    deleteRetentionPolicy: {
+      allowPermanentDelete: false
+      enabled: false
+    }
+  }
+}
+
+resource function_app_storage_container 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
+  parent: blob_service
+  name: function_app_storage_container_name
+  properties: {}
+}
+
+
+resource file_service 'Microsoft.Storage/storageAccounts/fileServices@2024-01-01' = {
+  parent: storage_account
+  name: 'default'
+  properties: {
+    shareDeleteRetentionPolicy: {
+      enabled: false
+    }
+  }
+}
+
+resource table_service 'Microsoft.Storage/storageAccounts/tableServices@2024-01-01' = {
+  parent: storage_account
+  name: 'default'
+}
+
+resource table_definition 'Microsoft.Storage/storageAccounts/tableServices/tables@2024-01-01' = {
+  parent: table_service
+  name: table_definition_name
+  properties: {}
+}
+
+resource server_farm 'Microsoft.Web/serverfarms@2024-04-01' = {
+  name: server_farm_name
+  location: 'uksouth'
+  kind: 'functionapp'
+  sku: {
+    name: 'FC1'
+    tier: 'FlexConsumption'
+    size: 'FC1'
+    family: 'FC'
+    capacity: 0
+  }
+  properties: {
+    perSiteScaling: false
+    elasticScaleEnabled: false
+    maximumElasticWorkerCount: 2
+    isSpot: false
+    reserved: true
+    isXenon: false
+    hyperV: false
+    targetWorkerCount: 0
+    targetWorkerSizeId: 0
+  }
+}
+
+resource sites_iot_processing_name_resource 'Microsoft.Web/sites@2024-04-01' = {
+  name: function_app_name
+  location: location
+  kind: 'functionapp,linux'
+  properties: {
+    enabled: true
+    serverFarmId: server_farm_id
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobcontainer'
+          value: function_app_storage_endpoint
+          authentication: {
+            type: 'storageaccountconnectionstring'
+            storageAccountConnectionStringName: 'DEPLOYMENT_STORAGE_CONNECTION_STRING'
+          }
+        }
+      }
+      runtime: {
+        name: 'dotnet-isolated'
+        version: '8.0'
+      }
+      scaleAndConcurrency: {
+        instanceMemoryMB: 2048
+        maximumInstanceCount: 40
+      }
+    }
+    publicNetworkAccess: 'Enabled'
+    siteConfig: {
+      appSettings: [
+        {
+          name: 'DEPLOYMENT_STORAGE_CONNECTION_STRING'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storage_account.name};AccountKey=${storage_account.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+        }
+        {
+          name: 'AzureWebJobsStorage'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storage_account.name};AccountKey=${storage_account.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+        }
+        {
+          name: 'Storage_Uri'
+          value: storage_account.properties.primaryEndpoints.table
+        }
+        {
+          name: 'Storage_AccountName'
+          value: storage_account_name
+        }
+        {
+          name: 'Storage_AccountKey'
+          value: storage_account.listKeys().keys[0].value
+        }
+        {
+          name: 'Storage_TableName'
+          value: table_definition_name
+        }
+      ]
+    }
+  }
+  dependsOn: [
+    server_farm
+  ]
+}
+
+resource host_name_bindings 'Microsoft.Web/sites/hostNameBindings@2024-04-01' = {
+  parent: sites_iot_processing_name_resource
+  name: '${function_app_name}.azurewebsites.net'
+  properties: {
+    siteName: 'iot-processing'
+    hostNameType: 'Verified'
   }
 }

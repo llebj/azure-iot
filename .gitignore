@@ -5,6 +5,9 @@
 
 appsettings.json
 
+# The automatically generated solution file
+azure-iot.sln
+
 # Bicep parameter files
 *.bicepparam
 

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Azure.Data.Tables;
 
 namespace MqttProcessing
 {
@@ -18,11 +19,29 @@ namespace MqttProcessing
         }
 
         [Function("MessageProcessor")]
-        public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req,
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req,
             [FromBody] Measurement measurement)
         {
-            _logger.LogInformation("C# HTTP trigger function processed a request.");
-            _logger.LogDebug("Received: {Measurement}", measurement);
+            _logger.LogInformation("Received: {Measurement}", measurement);
+
+            var uri = Environment.GetEnvironmentVariable("Storage_Uri");
+            var tableName = Environment.GetEnvironmentVariable("Storage_TableName");
+            var accountName = Environment.GetEnvironmentVariable("Storage_AccountName");
+            var accountKey = Environment.GetEnvironmentVariable("Storage_AccountKey");
+
+            var tableClient = new TableClient(
+                new Uri(uri!),
+                tableName,
+                new TableSharedKeyCredential(accountName, accountKey)
+            );
+            var entity = new TableEntity("demo", Guid.NewGuid().ToString())
+            {
+                { "Timestamp", measurement.TimeStamp },
+                { "Message", measurement.Message }
+            };
+            await tableClient.AddEntityAsync(entity);
+
+            _logger.LogInformation("Inserted {Measurement} into {TableName} table.", measurement, tableName);
             return new OkObjectResult(measurement);
         }
     }
