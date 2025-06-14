@@ -39,7 +39,16 @@ namespace MqttProcessing
                 { "Timestamp", measurement.TimeStamp },
                 { "Message", measurement.Message }
             };
-            await tableClient.AddEntityAsync(entity);
+
+            try
+            {
+                await tableClient.AddEntityAsync(entity);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, e.Message);
+                throw;
+            }
 
             _logger.LogInformation("Inserted {Measurement} into {TableName} table.", measurement, tableName);
             return new OkObjectResult(measurement);
