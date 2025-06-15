@@ -1,18 +1,24 @@
 param location string = resourceGroup().location
 
-param functionAppName string = 'func-${uniqueString(resourceGroup().id)}'
+param frontEndFunctionAppName string = 'fe-func-${uniqueString(resourceGroup().id)}'
+param backEndFunctionAppName string = 'be-func-${uniqueString(resourceGroup().id)}'
 param serverFarmName string = 'asp-${uniqueString(resourceGroup().id)}'
 param functionStorageAccountName string = 'st${uniqueString(resourceGroup().id)}'
 param vnetName string = 'vnet-${uniqueString(resourceGroup().id)}'
-param functionSubnetName string = 'default'
+param frontEndFunctionSubnetName string = 'fe-sn'
+param backEndFunctionSubnetName string = 'be-sn'
 param applicationInsightsName string = 'appi-${uniqueString(resourceGroup().id)}'
 
 param vnetAddressPrefix string = '10.100.0.0/16'
-param functionSubnetAddressPrefix string = '10.100.0.0/24'
+param frontEndFunctionSubnetAddressPrefix string = '10.100.0.0/24'
+param backEndFunctionSubnetAddressPrefix string = '10.100.1.0/24'
 
+var queueDefinitionName string = 'readings'
 var tableDefinitionName string = 'readings'
-var functionAppStorageContainerName string = 'app-package-${functionAppName}'
-var functionAppStorageEndpoint string = 'https://${functionStorageAccountName}.blob.${environment().suffixes.storage}/${functionAppStorageContainerName}'
+var frontEndFunctionAppStorageContainerName string = 'app-package-${frontEndFunctionAppName}'
+var frontEndFunctionAppStorageEndpoint string = 'https://${functionStorageAccountName}.blob.${environment().suffixes.storage}/${frontEndFunctionAppStorageContainerName}'
+var backEndFunctionAppStorageContainerName string = 'app-package-${backEndFunctionAppName}'
+var backEndFunctionAppStorageEndpoint string = 'https://${functionStorageAccountName}.blob.${environment().suffixes.storage}/${backEndFunctionAppStorageContainerName}'
 
 resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
   name: vnetName
@@ -25,7 +31,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
     }
     subnets: [
       {
-        name: functionSubnetName
+        name: frontEndFunctionSubnetName
         properties: {
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
@@ -37,7 +43,31 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
               }
             }
           ]
-          addressPrefix: functionSubnetAddressPrefix
+          addressPrefix: frontEndFunctionSubnetAddressPrefix
+          serviceEndpoints: [
+            {
+              service: 'Microsoft.Storage'
+              locations: [
+                location
+              ]
+            }
+          ]
+        }
+      }
+      {
+        name: backEndFunctionSubnetName
+        properties: {
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          delegations: [
+            {
+              name: 'Microsoft.App.environments'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+          addressPrefix: backEndFunctionSubnetAddressPrefix
           serviceEndpoints: [
             {
               service: 'Microsoft.Storage'
@@ -71,7 +101,12 @@ resource functionStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' =
       defaultAction: 'Deny'
       virtualNetworkRules: [
         {
-          id: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, functionSubnetName)
+          id: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, frontEndFunctionSubnetName)
+          action: 'Allow'
+          state: 'Succeeded'
+        }
+        {
+          id: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, backEndFunctionSubnetName)
           action: 'Allow'
           state: 'Succeeded'
         }
@@ -94,9 +129,26 @@ resource functionStorageBlobService 'Microsoft.Storage/storageAccounts/blobServi
   }
 }
 
-resource functionStorageBlobStorageContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
+resource frontEndFunctionStorageBlobStorageContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
   parent: functionStorageBlobService
-  name: functionAppStorageContainerName
+  name: frontEndFunctionAppStorageContainerName
+  properties: {}
+}
+
+resource backEndFunctionStorageBlobStorageContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
+  parent: functionStorageBlobService
+  name: backEndFunctionAppStorageContainerName
+  properties: {}
+}
+
+resource queueService 'Microsoft.Storage/storageAccounts/queueServices@2024-01-01' = {
+  parent: functionStorageAccount
+  name: 'default'
+}
+
+resource queueDefinition 'Microsoft.Storage/storageAccounts/queueServices/queues@2024-01-01' = {
+  parent: queueService
+  name: queueDefinitionName
   properties: {}
 }
 
@@ -134,7 +186,7 @@ resource serverFarm 'Microsoft.Web/serverfarms@2024-04-01' = {
   properties: {
     perSiteScaling: false
     elasticScaleEnabled: false
-    maximumElasticWorkerCount: 2
+    maximumElasticWorkerCount: 4
     isSpot: false
     reserved: true
     isXenon: false
@@ -144,8 +196,8 @@ resource serverFarm 'Microsoft.Web/serverfarms@2024-04-01' = {
   }
 }
 
-resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
-  name: functionAppName
+resource frontEndFunctionApp 'Microsoft.Web/sites@2024-11-01' = {
+  name: frontEndFunctionAppName
   location: location
   kind: 'functionapp,linux'
   identity: {
@@ -158,7 +210,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       deployment: {
         storage: {
           type: 'blobContainer'
-          value: functionAppStorageEndpoint
+          value: frontEndFunctionAppStorageEndpoint
           authentication: {
             type: 'SystemAssignedIdentity'
           }
@@ -185,6 +237,70 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
         }
         {
           name: 'Storage_Uri'
+          value: '${functionStorageAccount.properties.primaryEndpoints.queue}${queueDefinitionName}'
+        }
+      ]
+    }
+  }
+}
+
+resource frontEndNetworkConfig 'Microsoft.Web/sites/networkConfig@2024-11-01' = {
+  parent: frontEndFunctionApp
+  name: 'virtualNetwork'
+  properties: {
+    subnetResourceId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, frontEndFunctionSubnetName)
+    swiftSupported: true
+  }
+  dependsOn: [
+    vnet
+  ]
+}
+
+resource backEndFunctionApp 'Microsoft.Web/sites@2024-11-01' = {
+  name: backEndFunctionAppName
+  location: location
+  kind: 'functionapp,linux'
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    serverFarmId: serverFarm.id
+    httpsOnly: true
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: backEndFunctionAppStorageEndpoint
+          authentication: {
+            type: 'SystemAssignedIdentity'
+          }
+        }
+      }
+      scaleAndConcurrency: {
+        maximumInstanceCount: 100
+        instanceMemoryMB: 2048
+      }
+      runtime: {
+        name: 'dotnet-isolated'
+        version: '8.0'
+      }
+    }
+    siteConfig: {
+      appSettings: [
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: applicationInsight.properties.ConnectionString
+        }
+        {
+          name: 'AzureWebJobsStorage__accountName'
+          value: functionStorageAccountName
+        }
+        {
+          name: 'AzureWebJobsStorage__queueServiceUri'
+          value: functionStorageAccount.properties.primaryEndpoints.queue
+        }
+        {
+          name: 'Storage_Uri'
           value: functionStorageAccount.properties.primaryEndpoints.table
         }
         {
@@ -197,10 +313,10 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
 }
 
 resource networkConfig 'Microsoft.Web/sites/networkConfig@2024-11-01' = {
-  parent: functionApp
+  parent: backEndFunctionApp
   name: 'virtualNetwork'
   properties: {
-    subnetResourceId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, functionSubnetName)
+    subnetResourceId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, backEndFunctionSubnetName)
     swiftSupported: true
   }
   dependsOn: [
@@ -214,12 +330,48 @@ resource blobContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@
   name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 }
 
-resource blobContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource frontEndBlobContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: functionStorageAccount
-  name: guid(functionStorageAccount.id, functionApp.id, blobContributorRoleDefinition.id)
+  name: guid(functionStorageAccount.id, frontEndFunctionApp.id, blobContributorRoleDefinition.id)
   properties: {
     roleDefinitionId: blobContributorRoleDefinition.id
-    principalId: functionApp.identity.principalId
+    principalId: frontEndFunctionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backEndBlobContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: functionStorageAccount
+  name: guid(functionStorageAccount.id, backEndFunctionApp.id, blobContributorRoleDefinition.id)
+  properties: {
+    roleDefinitionId: blobContributorRoleDefinition.id
+    principalId: backEndFunctionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Storage Queue Data Contributor 
+resource queueContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  scope: subscription()
+  name: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
+}
+
+resource queueContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: functionStorageAccount
+  name: guid(functionStorageAccount.id, frontEndFunctionApp.id, queueContributorRoleDefinition.id)
+  properties: {
+    roleDefinitionId: queueContributorRoleDefinition.id
+    principalId: frontEndFunctionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backEndQueueProcessorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: functionStorageAccount
+  name: guid(functionStorageAccount.id, backEndFunctionApp.id, queueContributorRoleDefinition.id)
+  properties: {
+    roleDefinitionId: queueContributorRoleDefinition.id
+    principalId: backEndFunctionApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -232,10 +384,10 @@ resource tableContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions
 
 resource tableContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: functionStorageAccount
-  name: guid(functionStorageAccount.id, functionApp.id, tableContributorRoleDefinition.id)
+  name: guid(functionStorageAccount.id, backEndFunctionApp.id, tableContributorRoleDefinition.id)
   properties: {
     roleDefinitionId: tableContributorRoleDefinition.id
-    principalId: functionApp.identity.principalId
+    principalId: backEndFunctionApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }

@@ -1,28 +1,27 @@
-
-using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribute;
-using Messaging;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using Azure.Data.Tables;
 using Azure.Identity;
+using Messaging;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Logging;
 
-namespace MqttProcessing
+namespace BackEndProcessing;
+
+public class BackEndProcessor
 {
-    public class MessageProcessor
+    private readonly ILogger<BackEndProcessor> _logger;
+
+    public BackEndProcessor(ILogger<BackEndProcessor> logger)
     {
-        private readonly ILogger<MessageProcessor> _logger;
+        _logger = logger;
+    }
 
-        public MessageProcessor(ILogger<MessageProcessor> logger)
+    [Function(nameof(BackEndProcessor))]
+    public async Task Run([QueueTrigger("readings")] string message)
+    {
         {
-            _logger = logger;
-        }
-
-        [Function("MessageProcessor")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req,
-            [FromBody] Measurement measurement)
-        {
+            _logger.LogInformation("Processing queue message: {QueueMessage}", message);
+            var measurement = JsonSerializer.Deserialize<Measurement>(message);
             _logger.LogInformation("Received: {Measurement}", measurement);
 
             var uri = Environment.GetEnvironmentVariable("Storage_Uri");
@@ -50,7 +49,6 @@ namespace MqttProcessing
             }
 
             _logger.LogInformation("Inserted {Measurement} into {TableName} table.", measurement, tableName);
-            return new OkObjectResult(measurement);
         }
     }
 }
