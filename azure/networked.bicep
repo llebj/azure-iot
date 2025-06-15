@@ -144,6 +144,9 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: serverFarm.id
     functionAppConfig: {
@@ -152,8 +155,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           type: 'blobContainer'
           value: functionAppStorageEndpoint
           authentication: {
-            type: 'storageAccountConnectionString'
-            storageAccountConnectionStringName: 'DEPLOYMENT_STORAGE_CONNECTION_STRING'
+            type: 'SystemAssignedIdentity'
           }
         }
       }
@@ -173,24 +175,12 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           value: applicationInsight.properties.ConnectionString
         }
         {
-          name: 'DEPLOYMENT_STORAGE_CONNECTION_STRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorageAccountName};AccountKey=${functionStorageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
-        }
-        {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorageAccountName};AccountKey=${functionStorageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
+          name: 'AzureWebJobsStorage__accountName'
+          value: functionStorageAccountName
         }
         {
           name: 'Storage_Uri'
           value: functionStorageAccount.properties.primaryEndpoints.table
-        }
-        {
-          name: 'Storage_AccountName'
-          value: functionStorageAccount.name
-        }
-        {
-          name: 'Storage_AccountKey'
-          value: functionStorageAccount.listKeys().keys[0].value
         }
         {
           name: 'Storage_TableName'
@@ -211,4 +201,36 @@ resource networkConfig 'Microsoft.Web/sites/networkConfig@2024-11-01' = {
   dependsOn: [
     vnet
   ]
+}
+
+// Storage Blob Data Contributor 
+resource blobContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  scope: subscription()
+  name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+}
+
+resource blobContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: functionStorageAccount
+  name: guid(functionStorageAccount.id, functionApp.id, blobContributorRoleDefinition.id)
+  properties: {
+    roleDefinitionId: blobContributorRoleDefinition.id
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Storage Table Data Contributor 
+resource tableContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  scope: subscription()
+  name: '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
+}
+
+resource tableContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: functionStorageAccount
+  name: guid(functionStorageAccount.id, functionApp.id, tableContributorRoleDefinition.id)
+  properties: {
+    roleDefinitionId: tableContributorRoleDefinition.id
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
 }

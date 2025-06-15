@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Azure.Data.Tables;
+using Azure.Identity;
 
 namespace MqttProcessing
 {
@@ -26,13 +27,11 @@ namespace MqttProcessing
 
             var uri = Environment.GetEnvironmentVariable("Storage_Uri");
             var tableName = Environment.GetEnvironmentVariable("Storage_TableName");
-            var accountName = Environment.GetEnvironmentVariable("Storage_AccountName");
-            var accountKey = Environment.GetEnvironmentVariable("Storage_AccountKey");
 
             var tableClient = new TableClient(
                 new Uri(uri!),
                 tableName,
-                new TableSharedKeyCredential(accountName, accountKey)
+                new DefaultAzureCredential()
             );
             var entity = new TableEntity("demo", Guid.NewGuid().ToString())
             {
