@@ -62,8 +62,12 @@ resource functionStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' =
   properties: {
     publicNetworkAccess: 'Enabled'
     allowBlobPublicAccess: false
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+    allowSharedKeyAccess: false
+    defaultToOAuthAuthentication: true
     networkAcls: {
-      bypass: 'AzureServices'
+      bypass: 'None'
       defaultAction: 'Deny'
       virtualNetworkRules: [
         {
@@ -149,6 +153,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   }
   properties: {
     serverFarmId: serverFarm.id
+    httpsOnly: true
     functionAppConfig: {
       deployment: {
         storage: {
