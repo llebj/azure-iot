@@ -30,7 +30,11 @@ public class FrontEndProcessor
         var uri = Environment.GetEnvironmentVariable("Storage_Uri");
         var queueClient = new QueueClient(
             new Uri(uri!),
-            new DefaultAzureCredential()
+            new DefaultAzureCredential(),
+            new QueueClientOptions
+            {
+                MessageEncoding = QueueMessageEncoding.Base64
+            }
         );
 
         try

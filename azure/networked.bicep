@@ -1,16 +1,20 @@
 param location string = resourceGroup().location
-
-param frontEndFunctionAppName string = 'fe-func-${uniqueString(resourceGroup().id)}'
-param backEndFunctionAppName string = 'be-func-${uniqueString(resourceGroup().id)}'
-param functionStorageAccountName string = 'st${uniqueString(resourceGroup().id)}'
-param vnetName string = 'vnet-${uniqueString(resourceGroup().id)}'
-
 param vnetAddressPrefix string = '10.100.0.0/16'
+param frontendSubnetAddressPrefix string = '10.100.1.0/24'
+param backendSubnetAddressPrefix string = '10.100.2.0/24'
 
-var queueDefinitionName string = 'readings'
-var tableDefinitionName string = 'readings'
-var frontEndFunctionAppStorageContainerName string = 'app-package-${frontEndFunctionAppName}'
-var backEndFunctionAppStorageContainerName string = 'app-package-${backEndFunctionAppName}'
+var uniqueSuffix = uniqueString(resourceGroup().id)
+var vnetName = 'vnet-${uniqueSuffix}'
+var frontEndSubnetName = 'snet-frontend'
+var backEndSubnetName = 'snet-backend'
+var functionStorageAccountName = 'st${uniqueSuffix}'
+var applicationInsightsName = 'appi-${uniqueSuffix}'
+var frontEndFunctionAppName = 'func-frontend-${uniqueSuffix}'
+var backEndFunctionAppName = 'func-backend-${uniqueSuffix}'
+
+var queueDefinitionName = 'readings'
+var tableDefinitionName = 'readings'
+var storageServiceName = 'default'
 
 resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
   name: vnetName
@@ -21,6 +25,56 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
         vnetAddressPrefix
       ]
     }
+    subnets: [
+      {
+        name: frontEndSubnetName
+        properties: {
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          delegations: [
+            {
+              name: 'Microsoft.App.environments'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+          addressPrefix: frontendSubnetAddressPrefix
+          serviceEndpoints: [
+            {
+              service: 'Microsoft.Storage'
+              locations: [
+                location
+              ]
+            }
+          ]
+        }
+      }
+      {
+        name: backEndSubnetName
+        properties: {
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          delegations: [
+            {
+              name: 'Microsoft.App.environments'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+          addressPrefix: backendSubnetAddressPrefix
+          serviceEndpoints: [
+            {
+              service: 'Microsoft.Storage'
+              locations: [
+                location
+              ]
+            }
+          ]
+        }
+      }
+    ]
   }
 }
 
@@ -39,8 +93,20 @@ resource functionStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' =
     allowSharedKeyAccess: false
     defaultToOAuthAuthentication: true
     networkAcls: {
-      bypass: 'None'
+      bypass: 'AzureServices'
       defaultAction: 'Deny'
+      virtualNetworkRules: [
+        {
+          id: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, frontEndSubnetName)
+          action: 'Allow'
+          state: 'Succeeded'
+        }
+        {
+          id: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, backEndSubnetName)
+          action: 'Allow'
+          state: 'Succeeded'
+        }
+      ]
     }
   }
   dependsOn: [
@@ -50,7 +116,7 @@ resource functionStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' =
 
 resource functionStorageBlobService 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01' = {
   parent: functionStorageAccount
-  name: 'default'
+  name: storageServiceName
   properties: {
     deleteRetentionPolicy: {
       allowPermanentDelete: false
@@ -59,21 +125,9 @@ resource functionStorageBlobService 'Microsoft.Storage/storageAccounts/blobServi
   }
 }
 
-resource frontEndFunctionStorageBlobStorageContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
-  parent: functionStorageBlobService
-  name: frontEndFunctionAppStorageContainerName
-  properties: {}
-}
-
-resource backEndFunctionStorageBlobStorageContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
-  parent: functionStorageBlobService
-  name: backEndFunctionAppStorageContainerName
-  properties: {}
-}
-
 resource queueService 'Microsoft.Storage/storageAccounts/queueServices@2024-01-01' = {
   parent: functionStorageAccount
-  name: 'default'
+  name: storageServiceName
 }
 
 resource queueDefinition 'Microsoft.Storage/storageAccounts/queueServices/queues@2024-01-01' = {
@@ -84,11 +138,56 @@ resource queueDefinition 'Microsoft.Storage/storageAccounts/queueServices/queues
 
 resource tableService 'Microsoft.Storage/storageAccounts/tableServices@2024-01-01' = {
   parent: functionStorageAccount
-  name: 'default'
+  name: storageServiceName
 }
 
 resource tableDefinition 'Microsoft.Storage/storageAccounts/tableServices/tables@2024-01-01' = {
   parent: tableService
   name: tableDefinitionName
   properties: {}
+}
+
+resource applicationInsight 'Microsoft.Insights/components@2020-02-02' = {
+  name: applicationInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+  }
+}
+
+module frontendModule 'frontend.bicep' = {
+  name: 'frontend-deployment'
+  params: {
+    location: location
+    functionAppName: frontEndFunctionAppName
+    subnetId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, frontEndSubnetName)
+    storageAccountName: functionStorageAccountName
+    storageAccountId: functionStorageAccount.id
+    storageServiceName: storageServiceName
+    queueName: queueDefinitionName
+    applicationInsightsConnectionString: applicationInsight.properties.ConnectionString
+  }
+  dependsOn: [
+    functionStorageBlobService
+    vnet
+  ]
+}
+
+module backendModule 'backend.bicep' = {
+  name: 'backend-deployment'
+  params: {
+    location: location
+    functionAppName: backEndFunctionAppName
+    subnetId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, backEndSubnetName)
+    storageAccountName: functionStorageAccountName
+    storageAccountId: functionStorageAccount.id
+    storageServiceName: storageServiceName
+    tableName: tableDefinitionName
+    applicationInsightsConnectionString: applicationInsight.properties.ConnectionString
+  }
+  dependsOn: [
+    functionStorageBlobService
+    vnet
+  ]
 }

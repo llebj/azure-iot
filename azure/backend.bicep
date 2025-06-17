@@ -1,134 +1,29 @@
-param location string = resourceGroup().location
+param location string
+param functionAppName string
+param subnetId string
+param storageAccountName string
+param storageAccountId string
+param storageServiceName string
+param tableName string
+param applicationInsightsConnectionString string
 
-param functionAppName string = 'func-${uniqueString(resourceGroup().id)}'
-param serverFarmName string = 'asp-${uniqueString(resourceGroup().id)}'
-param functionStorageAccountName string = 'st${uniqueString(resourceGroup().id)}'
-param vnetName string = 'vnet-${uniqueString(resourceGroup().id)}'
-param functionSubnetName string = 'se-backend'
-param applicationInsightsName string = 'appi-${uniqueString(resourceGroup().id)}'
+var serverFarmName = 'asp-backend-${uniqueString(resourceGroup().id)}'
+var functionAppStorageContainerName = 'app-package-${functionAppName}'
+var functionAppStorageEndpoint = 'https://${storageAccountName}.blob.${environment().suffixes.storage}/${functionAppStorageContainerName}'
 
-param vnetAddressPrefix string = '10.100.0.0/16'
-param functionSubnetAddressPrefix string = '10.100.0.0/24'
-
-var storageDefinitionName string = 'readings'
-var functionAppStorageContainerName string = 'app-package-${functionAppName}'
-var functionAppStorageEndpoint string = 'https://${functionStorageAccountName}.blob.${environment().suffixes.storage}/${functionAppStorageContainerName}'
-
-resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
-  name: vnetName
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        vnetAddressPrefix
-      ]
-    }
-    subnets: [
-      {
-        name: functionSubnetName
-        properties: {
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          delegations: [
-            {
-              name: 'Microsoft.App.environments'
-              properties: {
-                serviceName: 'Microsoft.App/environments'
-              }
-            }
-          ]
-          addressPrefix: functionSubnetAddressPrefix
-          serviceEndpoints: [
-            {
-              service: 'Microsoft.Storage'
-              locations: [
-                location
-              ]
-            }
-          ]
-        }
-      }
-    ]
-  }
+resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+  name: storageAccountName
 }
 
-resource functionStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
-  name: functionStorageAccountName
-  location: location
-  kind: 'StorageV2'
-  sku: {
-    name: 'Standard_LRS'
-  }
-  properties: {
-    publicNetworkAccess: 'Enabled'
-    allowBlobPublicAccess: false
-    supportsHttpsTrafficOnly: true
-    minimumTlsVersion: 'TLS1_2'
-    allowSharedKeyAccess: false
-    defaultToOAuthAuthentication: true
-    networkAcls: {
-      bypass: 'None'
-      defaultAction: 'Deny'
-      virtualNetworkRules: [
-        {
-          id: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, functionSubnetName)
-          action: 'Allow'
-          state: 'Succeeded'
-        }
-      ]
-    }
-  }
-  dependsOn: [
-    vnet
-  ]
-}
-
-resource functionStorageBlobService 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01' = {
-  parent: functionStorageAccount
-  name: 'default'
-  properties: {
-    deleteRetentionPolicy: {
-      allowPermanentDelete: false
-      enabled: false
-    }
-  }
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01' existing = {
+  parent: storageAccount
+  name: storageServiceName
 }
 
 resource functionStorageBlobStorageContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
-  parent: functionStorageBlobService
+  parent: blobService
   name: functionAppStorageContainerName
   properties: {}
-}
-
-resource tableService 'Microsoft.Storage/storageAccounts/tableServices@2024-01-01' = {
-  parent: functionStorageAccount
-  name: 'default'
-}
-
-resource tableDefinition 'Microsoft.Storage/storageAccounts/tableServices/tables@2024-01-01' = {
-  parent: tableService
-  name: storageDefinitionName
-  properties: {}
-}
-
-resource queueService 'Microsoft.Storage/storageAccounts/queueServices@2024-01-01' = {
-  parent: functionStorageAccount
-  name: 'default'
-}
-
-resource queueDefinition 'Microsoft.Storage/storageAccounts/queueServices/queues@2024-01-01' = {
-  parent: queueService
-  name: storageDefinitionName
-  properties: {}
-}
-
-resource applicationInsight 'Microsoft.Insights/components@2020-02-02' = {
-  name: applicationInsightsName
-  location: location
-  kind: 'web'
-  properties: {
-    Application_Type: 'web'
-  }
 }
 
 resource serverFarm 'Microsoft.Web/serverfarms@2024-04-01' = {
@@ -188,19 +83,19 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       appSettings: [
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: applicationInsight.properties.ConnectionString
+          value: applicationInsightsConnectionString
         }
         {
           name: 'AzureWebJobsStorage__accountName'
-          value: functionStorageAccountName
+          value: storageAccountName
         }
         {
           name: 'Storage_Uri'
-          value: functionStorageAccount.properties.primaryEndpoints.table
+          value: 'https://${storageAccountName}.table.${environment().suffixes.storage}/'
         }
         {
           name: 'Storage_TableName'
-          value: storageDefinitionName
+          value: tableName
         }
       ]
     }
@@ -211,12 +106,9 @@ resource networkConfig 'Microsoft.Web/sites/networkConfig@2024-11-01' = {
   parent: functionApp
   name: 'virtualNetwork'
   properties: {
-    subnetResourceId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, functionSubnetName)
+    subnetResourceId: subnetId
     swiftSupported: true
   }
-  dependsOn: [
-    vnet
-  ]
 }
 
 // Storage Blob Data Contributor 
@@ -226,8 +118,8 @@ resource blobContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@
 }
 
 resource blobContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: functionStorageAccount
-  name: guid(functionStorageAccount.id, functionApp.id, blobContributorRoleDefinition.id)
+  scope: storageAccount
+  name: guid(storageAccountId, functionApp.id, blobContributorRoleDefinition.id)
   properties: {
     roleDefinitionId: blobContributorRoleDefinition.id
     principalId: functionApp.identity.principalId
@@ -242,8 +134,8 @@ resource queueContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions
 }
 
 resource queueContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: functionStorageAccount
-  name: guid(functionStorageAccount.id, functionApp.id, queueContributorRoleDefinition.id)
+  scope: storageAccount
+  name: guid(storageAccountId, functionApp.id, queueContributorRoleDefinition.id)
   properties: {
     roleDefinitionId: queueContributorRoleDefinition.id
     principalId: functionApp.identity.principalId
@@ -258,8 +150,8 @@ resource tableContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions
 }
 
 resource tableContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: functionStorageAccount
-  name: guid(functionStorageAccount.id, functionApp.id, tableContributorRoleDefinition.id)
+  scope: storageAccount
+  name: guid(storageAccountId, functionApp.id, tableContributorRoleDefinition.id)
   properties: {
     roleDefinitionId: tableContributorRoleDefinition.id
     principalId: functionApp.identity.principalId
