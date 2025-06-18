@@ -156,7 +156,7 @@ resource applicationInsight 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-module frontendModule 'frontend.bicep' = {
+module frontendModule '../modules/frontend.bicep' = {
   name: 'frontend-deployment'
   params: {
     location: location
@@ -174,7 +174,7 @@ module frontendModule 'frontend.bicep' = {
   ]
 }
 
-module backendModule 'backend.bicep' = {
+module backendModule '../modules/backend.bicep' = {
   name: 'backend-deployment'
   params: {
     location: location
