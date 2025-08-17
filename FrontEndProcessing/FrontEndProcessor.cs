@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Azure.Identity;
 using Azure.Storage.Queues;
@@ -18,14 +19,20 @@ public class FrontEndProcessor
         _logger = logger;
     }
 
-    [Function("FrontEndProcessor")]
+    [Function(nameof(FrontEndProcessor))]
     public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req)
     {
-        using var reader = new StreamReader(req.Body);
+        using Activity activity = new(nameof(FrontEndProcessor));
+        activity.Start();
+
+        using StreamReader reader = new(req.Body);
         var requestBody = await reader.ReadToEndAsync();
         _logger.LogInformation("Request body: {RequestBody}", requestBody);
         var measurement = JsonSerializer.Deserialize<Measurement>(requestBody);
         _logger.LogInformation("Received: {Measurement}", measurement);
+
+        // Attach the activity id to the IotMessage so that activities can be correlated with downstream operations.
+        IotMessage message = new(activity?.Id, measurement);
 
         var uri = Environment.GetEnvironmentVariable("Storage_Uri");
         var queueClient = new QueueClient(
@@ -39,7 +46,7 @@ public class FrontEndProcessor
 
         try
         {
-            await queueClient.SendMessageAsync(JsonSerializer.Serialize(measurement));
+            await queueClient.SendMessageAsync(JsonSerializer.Serialize(message));
         }
         catch (Exception e)
         {
